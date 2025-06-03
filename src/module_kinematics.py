@@ -37,20 +37,15 @@ def eul_to_rotm(eul):
     return R
     
 def eul_rate_matrix(eul):
-    roll, pitch, yaw = eul.flatten()
-
-    c_phi = np.cos(roll)
-    s_phi = np.sin(roll)
-    c_theta = np.cos(pitch)
-    s_theta = np.sin(pitch)
-
-    J2 = np.array([
-        [1, 0, -s_theta],
-        [0, c_phi, s_phi * c_theta],
-        [0, -s_phi, c_phi * c_theta]
+    roll, pitch, _ = eul.flatten()
+    
+    J = np.array([
+        [1, 0, -np.sin(pitch)],
+        [0, np.cos(roll), np.sin(roll)*np.cos(pitch)],
+        [0, -np.sin(roll), np.cos(roll)*np.cos(pitch)]
     ])
-
-    return J2
+    
+    return J
 # Example usage
 if __name__ == "__main__":
     # Input vector (3x1)
