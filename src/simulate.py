@@ -2,89 +2,120 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
-class Vessel:
-    def __init__(self):
-        # Any vessel-specific parameters can be initialized here
-        pass
+# -----------------------------
+# Define the ship dynamics
+# -----------------------------
 
-    def vessel_ode(self, t, state):
-        """
-        Returns the time derivative of the state vector.
-        State is a 13x1 vector:
-        [u, v, w, p, q, r, x, y, z, phi, theta, psi, delta]
-        """
-        # Unpack state variables
-        u, v, w = state[0], state[1], state[2]       # Linear velocities
-        p, q, r = state[3], state[4], state[5]       # Angular velocities
-        x, y, z = state[6], state[7], state[8]       # Position
-        phi, theta, psi = state[9], state[10], state[11]  # Orientation
-        delta = state[12]                            # Rudder angle
+def ship_dynamics(t, y):
+    # State variables
+    u, r, psi, x, y_pos, delta = y
 
-        # For now, use a simple constant model (placeholder dynamics)
-        # You should replace this with your vessel's dynamics
-        du = 0
-        dv = 0
-        dw = 0
-        dp = 0
-        dq = 0
-        dr = 0
+    # Ship parameters
+    m = 500.0       # mass [kg]
+    Iz = 1000.0     # moment of inertia [kg m^2]
+    X_u = -50.0     # surge damping [Ns/m]
+    N_r = -30.0     # yaw damping [Nms/rad]
+    L = 5.0         # rudder moment arm [m]
+    delta_max = np.deg2rad(30)  # rudder angle limit
+    K_rudder = 10.0             # rudder gain
 
-        dx = u * np.cos(psi) - v * np.sin(psi)
-        dy = u * np.sin(psi) + v * np.cos(psi)
-        dz = 0  # Assume no vertical motion
+    # Desired rudder input: step input of 10 degrees
+    delta_input = np.deg2rad(10)
 
-        dphi = p
-        dtheta = q
-        dpsi = r
+    # Rudder angle dynamics (1st-order lag)
+    delta_dot = (delta_input - delta) * 1.0  # time constant = 1 s
 
-        ddelta = 0  # Assuming constant rudder for now
+    # Equations of motion
+    du = (X_u * u) / m
+    dr = (N_r * r + L * delta) / Iz
+    dpsi = r
+    dx = u * np.cos(psi)
+    dy = u * np.sin(psi)
 
-        # Assemble derivative vector
-        dstate = np.array([
-            du, dv, dw, dp, dq, dr,
-            dx, dy, dz, dphi, dtheta, dpsi,
-            ddelta
-        ]).reshape((13, 1))
+    return [du, dr, dpsi, dx, dy, delta_dot]
 
-        return dstate
+# -----------------------------
+# Initial conditions
+# -----------------------------
 
-    def simulate(self):
-        # Initial state vector [u, v, w, p, q, r, x, y, z, phi, theta, psi, delta]
-        state0 = np.zeros((13, 1))
-        state0[0] = 2.0  # Initial forward speed (u)
-        state0[12] = 0.1  # Rudder angle (delta)
+u0 = 5.0       # Initial forward velocity [m/s]
+r0 = 0.0       # Initial yaw rate [rad/s]
+psi0 = 0.0     # Initial heading angle [rad]
+x0 = 0.0       # Initial x position [m]
+y0 = 0.0       # Initial y position [m]
+delta0 = 0.0   # Initial rudder angle [rad]
 
-        state0 = state0.flatten()
+y_init = [u0, r0, psi0, x0, y0, delta0]
 
-        t0 = 0.0
-        tf = 100.0
-        t_eval = np.linspace(t0, tf, 1000)
+# Time span for simulation
+t_span = (0, 100)  # simulate from t=0 to t=100s
+t_eval = np.linspace(t_span[0], t_span[1], 1000)
 
-        # Define a wrapper for solve_ivp
-        def ode_wrapper(t, state):
-            return self.vessel_ode(t, state).flatten()
+# -----------------------------
+# Solve the system
+# -----------------------------
 
-        # Run the simulation
-        sol = solve_ivp(ode_wrapper, (t0, tf), state0, t_eval=t_eval, method='RK45')
+solution = solve_ivp(ship_dynamics, t_span, y_init, t_eval=t_eval, rtol=1e-8, atol=1e-8)
 
-        # Extract position for plotting
-        x = sol.y[6]
-        y = sol.y[7]
+# Extract solution variables
+u = solution.y[0]
+r = solution.y[1]
+psi = solution.y[2]
+x = solution.y[3]
+y_pos = solution.y[4]
+delta = solution.y[5]
+time = solution.t
 
-        # Plot trajectory
-        plt.figure(figsize=(8, 5))
-        plt.plot(x, y, label='Vessel Trajectory')
-        plt.xlabel("X Position (m)")
-        plt.ylabel("Y Position (m)")
-        plt.title("Vessel Trajectory Simulation")
-        plt.axis("equal")
-        plt.grid(True)
-        plt.legend()
-        plt.show()
+# -----------------------------
+# Plotting the results
+# -----------------------------
 
+plt.figure(figsize=(12, 10))
 
-# --- Run simulation ---
-if __name__ == "__main__":
-    vessel = Vessel()
-    vessel.simulate()
+# 1. Ship trajectory in x-y plane
+plt.subplot(3, 2, 1)
+plt.plot(x, y_pos, label='Trajectory')
+plt.xlabel('x [m]')
+plt.ylabel('y [m]')
+plt.title('Ship Trajectory (x-y)')
+plt.axis('equal')
+plt.grid(True)
+
+# 2. Velocity vs time
+plt.subplot(3, 2, 2)
+plt.plot(time, u, label='Velocity u')
+plt.xlabel('Time [s]')
+plt.ylabel('Velocity [m/s]')
+plt.title('Forward Velocity vs Time')
+plt.grid(True)
+
+# 3. Turn rate vs time
+plt.subplot(3, 2, 3)
+plt.plot(time, r, label='Turn rate r')
+plt.xlabel('Time [s]')
+plt.ylabel('Yaw Rate [rad/s]')
+plt.title('Yaw Rate vs Time')
+plt.grid(True)
+
+# 4. Rudder angle vs time
+plt.subplot(3, 2, 4)
+plt.plot(time, np.rad2deg(delta), label='Rudder angle')
+plt.xlabel('Time [s]')
+plt.ylabel('Rudder Angle [deg]')
+plt.title('Rudder Angle vs Time')
+plt.grid(True)
+
+# 5. Yaw angle vs time
+plt.subplot(3, 2, 5)
+plt.plot(time, np.rad2deg(psi), label='Yaw angle')
+plt.xlabel('Time [s]')
+plt.ylabel('Yaw Angle [deg]')
+plt.title('Yaw Angle vs Time')
+plt.grid(True)
+
+plt.tight_layout()
+plt.savefig("task9_ship_simulation.png")  # Saves the figure
+# plt.show()  # Uncomment if you're using a graphical environment
+
+print("✅ Task 9 simulation completed. Output saved as 'task9_ship_simulation.png'.")
 
